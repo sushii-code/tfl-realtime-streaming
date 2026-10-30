@@ -35,6 +35,8 @@ data/landing/
 dbt/target/
 dbt/logs/
 dbt/dbt_packages/
+# dbt's anonymous ID for this laptop, created next to profiles.yml
+dbt/.user.yml
 target/
 dbt_packages/
 

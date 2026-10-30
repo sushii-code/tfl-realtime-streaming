@@ -138,3 +138,32 @@ Duplicates can be fixed, but lost data can't. This is why `enable.auto.commit` i
 ### Why auto-suspend saves money
 
 A warehouse uses credits for as long as it is running, even when it is doing nothing. Each time it starts, it is charged for at least 60 seconds. `AUTO_SUSPEND = 60` stops it after 60 idle seconds, and `AUTO_RESUME = TRUE` starts it again when a query arrives. We pay for the time it is working, plus about a minute each time, instead of for all day.
+
+## Day 6
+
+### dbt terms
+
+- **dbt:** a tool that turns SQL `SELECT` statements into tables and views in the warehouse, in the right order. It doesn't move data into Snowflake. It transforms data that is already there.
+- **Model:** one SQL file containing one `SELECT`. The file name becomes the name of the view or table, so `stg_line_status.sql` builds `STG_LINE_STATUS`.
+- **Source:** a table that dbt reads but doesn't build. Ours is `RAW.LINE_STATUS_RAW`, which the loader fills.
+- **`ref()`:** how one model points to another. dbt uses it to work out the build order and to fill in the full table name.
+- **Tests:** checks on the data. Each one looks for bad rows, and it fails if it finds any. `not_null` looks for missing values, `accepted_values` looks for values not on a list, and a SQL file in `tests/` can check anything else.
+- **Freshness:** a check on how recently data arrived. It looks at the newest `loaded_at`: we get a warning after 1 hour and an error after 24 hours. It runs with `dbt source freshness`, not with `dbt test`.
+
+### Staging vs marts
+
+- **Staging:** a cleaned-up copy of a source, with proper columns and names and duplicates removed. `stg_line_status` has one row per line per poll.
+- **Marts:** tables built to answer business questions, using the staging models. `fct_line_status_daily` answers "how good was each line's service each day?"
+
+### View vs table
+
+- **View:** a saved query. It stores no data and runs each time it is read, so it is always up to date but does the work every time. Staging models are views.
+- **Table:** stored results. It is quick to read, but it only changes when dbt runs again. Marts are tables.
+
+### Deduplication
+
+Deduplication means keeping only one copy of something that appears more than once. Our consumer is at-least-once, so the same message can be saved in two files, and load history can't catch that. A partition and offset together identify one Kafka message, so `stg_line_status` keeps one row for each pair.
+
+This only works while offsets stay unique. Deleting the Kafka volume with `docker compose down -v` restarts offsets from 0, so new messages could share a partition and offset with old rows in Snowflake and be wrongly removed as duplicates.
+
+A line can also have more than one status in a single poll. We keep the lowest code, which TfL uses for the more serious problems, so a poll only counts as good service if nothing worse was reported.

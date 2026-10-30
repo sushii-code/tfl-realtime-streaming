@@ -1,0 +1,25 @@
+# The version of this file's format
+version: 2
+
+# The tables dbt reads but does not build
+sources:
+  # A group name for our raw data
+  - name: raw
+    # The database that holds it
+    database: TFL_DB
+    # The schema that holds it
+    schema: RAW
+    # The tables in this schema
+    tables:
+      # The table the Snowflake loader fills
+      - name: line_status_raw
+        # Settings for this table
+        config:
+          # The column that shows when a row arrived
+          loaded_at_field: loaded_at
+          # How old the newest row can be
+          freshness:
+            # Warn if nothing has been loaded for 1 hour
+            warn_after: {count: 1, period: hour}
+            # Report an error if nothing has been loaded for 24 hours
+            error_after: {count: 24, period: hour}

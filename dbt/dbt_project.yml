@@ -1,0 +1,28 @@
+# The name of this dbt project
+name: tfl_realtime
+# The version of this project
+version: "1.0.0"
+# The connection to use, from profiles.yml
+profile: tfl_realtime
+
+# The folder that holds the models
+model-paths: ["models"]
+# The folder that holds tests written as SQL files
+test-paths: ["tests"]
+
+# Settings for the models
+models:
+  # Settings for this project's models
+  tfl_realtime:
+    # Settings for everything in models/staging
+    staging:
+      # Build these as views
+      +materialized: view
+      # Put them in a schema ending in _STAGING
+      +schema: staging
+    # Settings for everything in models/marts
+    marts:
+      # Build these as tables
+      +materialized: table
+      # Put them in a schema ending in _MARTS
+      +schema: marts

@@ -1,0 +1,95 @@
+# The version of this file's format
+version: 2
+
+# Descriptions and tests for the staging models
+models:
+  # The model these settings apply to
+  - name: stg_line_status
+    # What this model is
+    description: One row per tube line per poll, with duplicate messages removed.
+    # The columns to describe and test
+    columns:
+      # The first column
+      - name: line_id
+        # What it holds
+        description: TfL's id for the line, such as bakerloo.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: line_name
+        # What it holds
+        description: The line's name, such as Bakerloo.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: status_severity
+        # What it holds
+        description: TfL's status code from 0 to 20. 10 means Good Service. If a line has several statuses, this is the lowest code.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+          # The value must be on TfL's list of codes
+          - accepted_values:
+              # The settings for this check
+              arguments:
+                # The allowed codes
+                values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+                # These are numbers, so do not put quotes around them
+                quote: false
+      # The next column
+      - name: status_description
+        # What it holds
+        description: The status in words, such as Good Service.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: reason
+        # What it holds
+        description: TfL's explanation of a problem. It is empty when the service is good, so it has no not_null check.
+      # The next column
+      - name: ingested_at
+        # What it holds
+        description: When the producer received the data, in UTC.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: kafka_partition
+        # What it holds
+        description: The Kafka partition the message came from.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: kafka_offset
+        # What it holds
+        description: The message's position in its partition.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: source_file
+        # What it holds
+        description: The stage file the record came from.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: loaded_at
+        # What it holds
+        description: When the row was loaded into Snowflake, in UTC.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null

@@ -1,0 +1,26 @@
+# How dbt connects to Snowflake; every value comes from the terminal, so no secrets are in this file
+tfl_realtime:
+  # The connection to use unless told otherwise
+  target: dev
+  # The list of connections
+  outputs:
+    # Our one connection
+    dev:
+      # We are connecting to Snowflake
+      type: snowflake
+      # The Snowflake account identifier
+      account: "{{ env_var('TFL_DBT_ACCOUNT') }}"
+      # The user to log in as
+      user: "{{ env_var('TFL_DBT_USER') }}"
+      # The role to use
+      role: "{{ env_var('TFL_DBT_ROLE') }}"
+      # The warehouse that runs the queries
+      warehouse: "{{ env_var('TFL_DBT_WAREHOUSE') }}"
+      # The database where dbt builds things
+      database: "{{ env_var('TFL_DBT_DATABASE') }}"
+      # The start of the name of the schemas dbt creates
+      schema: "{{ env_var('TFL_DBT_SCHEMA') }}"
+      # The PATH to the private key file, never the key itself
+      private_key_path: "{{ env_var('TFL_DBT_PRIVATE_KEY_PATH') }}"
+      # Run up to 4 models at the same time
+      threads: 4

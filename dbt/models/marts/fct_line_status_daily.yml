@@ -1,0 +1,75 @@
+# The version of this file's format
+version: 2
+
+# Descriptions and tests for the marts models
+models:
+  # The model these settings apply to
+  - name: fct_line_status_daily
+    # What this model is
+    description: One row per tube line per UTC day, showing how good the service was.
+    # The columns to describe and test
+    columns:
+      # The first column
+      - name: line_id
+        # What it holds
+        description: TfL's id for the line.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: line_name
+        # What it holds
+        description: The line's name.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: status_date
+        # What it holds
+        description: The UTC day.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: poll_count
+        # What it holds
+        description: How many polls we have for this line on this day.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: good_service_poll_count
+        # What it holds
+        description: How many of those polls showed Good Service (code 10).
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: good_service_pct
+        # What it holds
+        description: The percentage of polls with Good Service.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: first_seen_at
+        # What it holds
+        description: The first time this line was seen on this day, in UTC.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
+      # The next column
+      - name: last_seen_at
+        # What it holds
+        description: The last time this line was seen on this day, in UTC.
+        # The checks for this column
+        data_tests:
+          # Every row must have a value
+          - not_null
