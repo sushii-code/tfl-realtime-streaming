@@ -61,3 +61,24 @@ With two listeners, each kind of client gets an address that works for it.
 - **Easy setup:** Kafka needs Java and some configuration. Docker packages all of that, so nothing has to be installed on Windows.
 - **Same every time:** the pinned version and the compose file give the same setup on any machine.
 - **Easy cleanup:** one command stops everything and leaves the laptop as it was.
+
+## Day 3
+
+### Producer terms
+
+- **Producer:** a program that writes messages to Kafka. Ours calls the TfL API every 30 seconds and sends one message per tube line.
+- **Message key:** a label sent with a message. Ours is the line id, such as `bakerloo`. Kafka uses the key to choose the partition.
+- **Delivery callback:** a function Kafka's client calls later to report whether a message was stored. Sending only puts a message in a queue, so without a callback a failure could go unnoticed.
+- **Flush:** wait until the messages in the queue have been sent and confirmed. Without a flush on exit, messages still in the queue would be lost.
+- **Dead letter topic:** a separate topic for data we could not process. If TfL sends something we can't parse, we save the raw data and the error in `dead_letter` so it can be inspected later, and the good data keeps flowing.
+- **Backoff:** waiting longer after each failed try. We wait 2, then 4, 8 and 16 seconds. If an API is struggling, this gives it time to recover instead of adding to the load. Errors that retrying can't fix, such as a rejected key, are not retried.
+
+### Why the key keeps a line's messages in order
+
+Kafka only guarantees order within one partition. Messages with the same key go to the same partition, as long as the number of partitions stays the same, so all `bakerloo` messages stay in the order they were sent.
+
+`line_status` has just one partition today, so all its messages are already in order. The key means that each line would stay in order if we ever added partitions, although messages from different lines could then mix. Changing the partition count also changes where a key goes, so older and newer messages for a line could end up in different partitions.
+
+We also turn on `enable.idempotence`, which stops the client's own retries from duplicating or reordering messages.
+
+**IPv4 on Windows:** `localhost` can mean IPv6 (`[::1]`) or IPv4 (`127.0.0.1`), and Windows tries IPv6 first, but our Docker port is IPv4 only, so the producer sets `broker.address.family` to `v4` to avoid `Connect to ipv6#[::1]:9092 failed` errors.
