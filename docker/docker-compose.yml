@@ -89,7 +89,72 @@ services:
       # The UI is a container, so it uses Kafka's address for containers
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:29092"
 
+  # Airflow, which runs the pipeline on a schedule
+  airflow:
+    # How to build this container's image
+    build:
+      # Send the project's main folder to the build; .dockerignore hides all but requirements.txt
+      context: ..
+      # Where the build instructions are
+      dockerfile: airflow/Dockerfile
+    # The name to give the image we build
+    image: tfl-airflow:3.3.2
+    # The fixed name we use for this container in docker commands
+    container_name: tfl-airflow
+    # Run the scheduler, web page and everything else in this one container
+    command: ["airflow", "standalone"]
+    # The ports to open from my laptop into the container
+    ports:
+      # Open the UI at http://127.0.0.1:8081, from this laptop only
+      - "127.0.0.1:8081:8080"
+    # The containers that must be ready before this one starts
+    depends_on:
+      # Wait for the kafka service
+      kafka:
+        # Start Airflow only once Kafka's healthcheck passes
+        condition: service_healthy
+    # The file of Snowflake and dbt settings
+    env_file:
+      # The file's location, next to this one
+      - path: .env
+        # Let Kafka still start if the file is missing; Airflow's tasks will then report the problem
+        required: false
+    # The settings that are the same on every laptop
+    environment:
+      # Do not fill the UI with Airflow's example DAGs
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      # Airflow is a container, so it uses Kafka's address for containers
+      KAFKA_BOOTSTRAP_SERVER: "kafka:29092"
+      # Where the loader finds the private key, relative to /opt/tfl
+      SNOWFLAKE_PRIVATE_KEY_PATH: "keys/rsa_key.p8"
+      # Where dbt finds the private key inside the container
+      TFL_DBT_PRIVATE_KEY_PATH: "/opt/tfl/keys/rsa_key.p8"
+      # The dbt folder is read-only, so dbt writes its build files here instead
+      DBT_TARGET_PATH: "/tmp/dbt/target"
+      # The dbt folder is read-only, so dbt writes its logs here instead
+      DBT_LOG_PATH: "/tmp/dbt/logs"
+      # Turn off dbt's usage tracking, which also tries to write a file to the dbt folder
+      DBT_SEND_ANONYMOUS_USAGE_STATS: "false"
+    # The folders to share with the container
+    volumes:
+      # Keep Airflow's database, logs and login in a named volume, so they survive restarts
+      - airflow_home:/opt/airflow
+      # The DAG files, read-only
+      - ../airflow/dags:/opt/airflow/dags:ro
+      # The consumer's code, read-only
+      - ../consumer:/opt/tfl/consumer:ro
+      # The loader's code, read-only
+      - ../snowflake:/opt/tfl/snowflake:ro
+      # The dbt project, read-only
+      - ../dbt:/opt/tfl/dbt:ro
+      # The private key, read-only, so nothing in the container can change it
+      - ../keys:/opt/tfl/keys:ro
+      # The landing files, read-write, because the consumer writes here
+      - ../data/landing:/opt/tfl/data/landing
+
 # The named volumes used above
 volumes:
   # Docker creates and looks after this volume, which holds Kafka's data
   kafka_data:
+  # Docker creates and looks after this volume, which holds Airflow's data
+  airflow_home:

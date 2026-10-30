@@ -167,3 +167,31 @@ Deduplication means keeping only one copy of something that appears more than on
 This only works while offsets stay unique. Deleting the Kafka volume with `docker compose down -v` restarts offsets from 0, so new messages could share a partition and offset with old rows in Snowflake and be wrongly removed as duplicates.
 
 A line can also have more than one status in a single poll. We keep the lowest code, which TfL uses for the more serious problems, so a poll only counts as good service if nothing worse was reported.
+
+## Day 7
+
+### Airflow terms
+
+- **Orchestration:** making several jobs run in the right order, at the right time, and dealing with failures. Airflow does this for our pipeline, so I don't have to run each script by hand.
+- **DAG:** the description of a workflow: which tasks exist and what order they run in. The name stands for Directed Acyclic Graph, which means the steps go one way and never loop back. Ours is `tfl_line_status_pipeline`.
+- **Task:** one step in a DAG. Ours are consume, load, dbt run, dbt test and dbt source freshness. A task only starts if the one before it succeeded.
+- **Schedule:** when the DAG runs. `0 * * * *` means at minute 0 of every hour. We run hourly to save Snowflake trial credits, because each run wakes the warehouse.
+- **Catchup:** whether Airflow also runs every schedule it missed in the past, for example while my laptop was off. Ours is off, because a single run picks up all the data waiting in Kafka anyway.
+- **Retries:** trying a failed task again after a wait, because many failures are temporary, such as a network problem. Ours try 2 more times, 2 minutes apart.
+- **Idempotent:** running something twice gives the same result as running it once, so a retry is safe. Load history skips loaded files, dbt rebuilds its models and removes duplicate messages, and offsets mean the consumer carries on from where it stopped.
+
+### Why the consumer drains
+
+A normal consumer runs forever, but an Airflow task has to finish before the next one can start. In drain mode (`CONSUMER_RUN_ONCE=true`), the consumer reads until it reaches the end of each partition, saves the batch, commits and exits. Kafka keeps new messages until the next run.
+
+### Why the producer is not in Airflow
+
+A streaming producer is meant to run all the time. Airflow is built for jobs that start, finish and report success or failure. A producer never finishes, so as a task it would either look stuck forever or hit its timeout. Running it once an hour wouldn't work either, because it would miss the status changes in between. So the producer runs on its own and writes to Kafka all the time, Kafka holds the messages, and Airflow collects them in batches.
+
+### Why Airflow uses kafka:29092, not localhost:9092
+
+Inside a container, `localhost` means that container itself, and Kafka isn't running in the Airflow container. Containers in the same Compose file share a network where they find each other by service name, so Airflow uses `kafka:29092`. Programs on my laptop still use `localhost:9092`.
+
+### Mounting secrets read-only
+
+A mount shares a folder from my laptop with a container without copying it. The private key is mounted, not copied into the image, because anything put in an image stays in its layers and can be shared by accident. `:ro` means read-only, so nothing in the container can change or delete the key. The container can still read the key, so read-only protects the file, not its secrecy, and it still must never be printed or committed.

@@ -1,0 +1,4 @@
+# Hide everything from Docker builds, so keys and secrets can never end up in an image
+*
+# ...except the one file the Airflow image needs
+!requirements.txt

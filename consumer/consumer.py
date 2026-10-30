@@ -18,7 +18,7 @@ import time
 import uuid
 
 # These let us read from Kafka, write to Kafka, and name a partition when committing
-from confluent_kafka import Consumer, KafkaException, Producer, TopicPartition
+from confluent_kafka import Consumer, KafkaError, KafkaException, Producer, TopicPartition
 
 # Wait this many seconds for a new message before checking the batch timer again
 POLL_TIMEOUT_SECONDS = 1
@@ -43,6 +43,8 @@ LANDING_DIR = PROJECT_ROOT / (os.environ.get("LANDING_DIR") or "data/landing/lin
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE") or 100)
 # Read how many seconds a batch can stay open, and convert the text to a number
 BATCH_SECONDS = int(os.environ.get("BATCH_SECONDS") or 30)
+# Read whether to drain: read everything available, save it, commit, then exit
+RUN_ONCE = os.environ.get("CONSUMER_RUN_ONCE", "").lower() == "true"
 
 # Show messages of level INFO and above, with the time and level in front
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -234,6 +236,8 @@ def main():
         "auto.offset.reset": "earliest",
         # We commit offsets ourselves, only after a batch file is safely written
         "enable.auto.commit": False,
+        # In drain mode, ask Kafka to tell us when we reach the end of a partition
+        "enable.partition.eof": RUN_ONCE,
         # Use IPv4 only: Windows tries IPv6 first, but our Docker port is IPv4 only
         "broker.address.family": "v4",
     # End of the settings
@@ -256,6 +260,8 @@ def main():
     message_count = 0
     # The time the batch's first message arrived
     batch_started = 0
+    # In drain mode, the partitions we have read to the end
+    drained_partitions = set()
     # Start a block where we can catch Ctrl+C
     try:
         # Join the consumer group and start reading the topic
@@ -270,14 +276,28 @@ def main():
             if message is not None:
                 # Kafka can also use this to report a problem instead of giving us data
                 if message.error():
+                    # In drain mode, this means that we have reached the end of a partition
+                    if message.error().code() == KafkaError._PARTITION_EOF:
+                        # Remember that this partition is finished
+                        drained_partitions.add(message.partition())
+                        # Find the partitions this consumer is responsible for
+                        assigned_partitions = {item.partition for item in consumer.assignment()}
+                        # Stop reading once all of them are finished
+                        if assigned_partitions <= drained_partitions:
+                            # Leave the reading loop
+                            break
                     # A fatal problem can't be fixed by carrying on
-                    if message.error().fatal():
+                    elif message.error().fatal():
                         # Stop the script without committing
                         raise KafkaException(message.error())
-                    # Log any other problem; Kafka's client usually recovers by itself
-                    logger.warning("Kafka reported a problem: %s", message.error())
+                    # Otherwise it is some other problem
+                    else:
+                        # Log it; Kafka's client usually recovers by itself
+                        logger.warning("Kafka reported a problem: %s", message.error())
                 # Otherwise this message holds data
                 else:
+                    # A new message means that this partition is not finished after all
+                    drained_partitions.discard(message.partition())
                     # The first message of a new batch starts the batch timer
                     if message_count == 0:
                         # Note the time
@@ -304,6 +324,12 @@ def main():
                 finish_batch(consumer, producer, batch, offsets)
                 # Start counting the next batch from zero
                 message_count = 0
+        # We only get here in drain mode, once every partition has been read to the end
+        logger.info("Everything available has been read.")
+        # Only finish the batch if it has anything in it
+        if message_count > 0:
+            # Save the remaining messages, then commit their offsets
+            finish_batch(consumer, producer, batch, offsets)
     # Ctrl+C raises KeyboardInterrupt
     except KeyboardInterrupt:
         # Tell the user that we are stopping on purpose
