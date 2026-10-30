@@ -195,3 +195,17 @@ Inside a container, `localhost` means that container itself, and Kafka isn't run
 ### Mounting secrets read-only
 
 A mount shares a folder from my laptop with a container without copying it. The private key is mounted, not copied into the image, because anything put in an image stays in its layers and can be shared by accident. `:ro` means read-only, so nothing in the container can change or delete the key. The container can still read the key, so read-only protects the file, not its secrecy, and it still must never be printed or committed.
+
+## Day 8
+
+### Dashboard terms
+
+- **Streamlit:** a Python library that turns a script into a web page, with no HTML needed. Each time someone clicks something, Streamlit runs the script again from the top.
+- **Caching:** saving an answer so it can be reused instead of worked out again. Because Streamlit reruns the script so often, each click would otherwise query Snowflake and wake the warehouse. Our results are kept for 5 minutes, and changing the line filter only filters the saved results. The Refresh button clears them, so it does use credits.
+- **Read-only reporting role:** `TFL_REPORTER_ROLE` can read the dbt results and nothing else. A dashboard never needs to change data, so if its login leaks, nobody can use it to change or delete anything, or see `RAW`. Its "future" grants matter because dbt replaces its tables on every run, and a replaced table would otherwise lose its permissions.
+
+### Why the dashboard reads marts, not raw
+
+Raw data is messy: JSON in one column, duplicate messages, and no agreed definition of anything. If the dashboard read it, it would have to repeat all the cleaning, and it could end up disagreeing with other reports. Marts are already cleaned, tested and summarised, and "% good service" is defined in one place.
+
+Our "Today" chart reads the mart `FCT_LINE_STATUS_DAILY`. "Right now" and "Disruptions" need each separate poll, which a daily table doesn't have, so they read the staging view `STG_LINE_STATUS`. That is still clean, tested dbt output, and never `RAW`.

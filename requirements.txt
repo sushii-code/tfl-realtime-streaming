@@ -4,3 +4,4 @@ dbt-core==1.12.6
 dbt-snowflake==1.12.4
 requests==2.34.2
 snowflake-connector-python==4.8.1
+streamlit==1.66.1
