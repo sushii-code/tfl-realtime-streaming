@@ -23,6 +23,8 @@ venv/
 # Private key files (Snowflake key-pair login uses these)
 *.pem
 *.p8
+# The folder for the Snowflake key pair, made by snowflake/generate_keys.py
+keys/
 
 # --- Data ---
 # Files written by the consumer must not go to GitHub (data/samples is still kept)

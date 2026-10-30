@@ -1,2 +1,4 @@
 confluent-kafka==2.16.1
+cryptography==50.0.2
 requests==2.34.2
+snowflake-connector-python==4.8.1

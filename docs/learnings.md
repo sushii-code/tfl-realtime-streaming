@@ -113,3 +113,28 @@ Duplicates can be fixed, but lost data can't. This is why `enable.auto.commit` i
 - **JSON Lines:** a text file with one complete JSON object on each line. Tools can read it line by line, so a huge file doesn't have to fit in memory, and it is easy to load into Snowflake.
 - **Landing zone:** the folder where raw data first arrives, before any real transformation. If a later step has a bug, we can rerun it from these files without calling the API again. Ours is `data/landing/line_status/`, split into a `date=YYYY-MM-DD` folder for each day. It is not sent to GitHub, because data files don't belong in a code repository.
 - **Why we remove `$type`:** TfL's API adds `$type` fields that name its internal code types, such as `Tfl.Api.Presentation.Entities.Line`. They say nothing about the tube, they repeat at every level, and they make every record bigger.
+
+## Day 5
+
+### Where data lives in Snowflake
+
+- **Warehouse:** the computing power that runs queries and loads. It doesn't store any data. Ours is `TFL_WH`, the smallest size.
+- **Database:** the top-level container for data. Ours is `TFL_DB`.
+- **Schema:** a group of related tables and other objects inside a database, like a folder. Ours is `RAW`, for data that hasn't been transformed yet. Its full name is `TFL_DB.RAW`.
+- **Stage:** a storage area for files waiting to be loaded. They aren't in a table yet, so they can't be queried like one. `PUT` uploads files to our stage, `LINE_STATUS_STAGE`.
+- **VARIANT:** a column type that can hold a whole JSON record. We can load the data before deciding on its columns, and later read a field with `record:name`.
+
+### Loading
+
+- **COPY INTO:** the command that loads files from a stage into a table. It needs a running warehouse, so it uses credits. `PUT` doesn't.
+- **Load history:** Snowflake remembers which files have been loaded into each table, for 64 days. `COPY INTO` skips those files, so running the loader twice doesn't load them twice. A file is only protected once: it doesn't remove duplicate messages from the consumer that ended up in different files.
+
+### Security
+
+- **Role and least privilege:** a role is a named set of permissions, and users get their permissions through roles. Least privilege means giving only what is needed. If the loader's login leaks, `TFL_LOADER_ROLE` can't touch anything outside its warehouse, database and schema, or delete data.
+- **Service user:** a user for programs instead of people. `TFL_LOADER` has `TYPE = SERVICE`, so it has no password and can't use the Snowsight website.
+- **Key-pair authentication:** logging in with two matching keys instead of a password. Snowflake stores the public key, which is safe to share. The private key stays on my laptop and signs a login token. The private key is never sent to Snowflake, and anyone who has the file can log in as the loader, so it must never be shared or committed.
+
+### Why auto-suspend saves money
+
+A warehouse uses credits for as long as it is running, even when it is doing nothing. Each time it starts, it is charged for at least 60 seconds. `AUTO_SUSPEND = 60` stops it after 60 idle seconds, and `AUTO_RESUME = TRUE` starts it again when a query arrives. We pay for the time it is working, plus about a minute each time, instead of for all day.
