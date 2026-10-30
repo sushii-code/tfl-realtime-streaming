@@ -82,3 +82,34 @@ Kafka only guarantees order within one partition. Messages with the same key go 
 We also turn on `enable.idempotence`, which stops the client's own retries from duplicating or reordering messages.
 
 **IPv4 on Windows:** `localhost` can mean IPv6 (`[::1]`) or IPv4 (`127.0.0.1`), and Windows tries IPv6 first, but our Docker port is IPv4 only, so the producer sets `broker.address.family` to `v4` to avoid `Connect to ipv6#[::1]:9092 failed` errors.
+
+## Day 4
+
+### Consumer terms
+
+- **Consumer:** a program that reads messages from Kafka. Ours reads `line_status` and saves the messages as files. Reading doesn't remove a message from Kafka.
+- **Consumer group:** a team of consumers sharing the work of reading a topic, identified by a group id. Each partition is read by one member at a time. Ours is `line_status_landing`, with one member. Another group could read the same topic separately, from its own position.
+- **Offset:** a message's position number within a partition, as on Day 1. Each group keeps its own position for each partition.
+- **Committing offsets:** telling Kafka "this group has finished everything before this position". After a restart, the group carries on from there. The first time, there is no position yet, so `auto.offset.reset` set to `earliest` starts from the oldest message.
+
+### At-least-once vs exactly-once
+
+- **At-least-once:** every message is handled, but some may be handled twice. Nothing is lost.
+- **Exactly-once:** every message is handled exactly one time. This is much harder to achieve when writing to something outside Kafka, such as files, because saving a file and committing an offset can't happen as one single step.
+
+We use at-least-once, so the same message can appear in more than one file. `kafka_partition` and `kafka_offset` together identify each message, so duplicates can be removed later.
+
+### Why we commit only after writing
+
+Think about a crash between the two steps:
+
+- **Write, then commit (what we do):** the file is saved but the commit is lost. After a restart, those messages are read and written again. We get duplicates, which can be removed.
+- **Commit, then write:** the commit is saved but the file is not. After a restart, Kafka thinks those messages are done, so they are lost for good.
+
+Duplicates can be fixed, but lost data can't. This is why `enable.auto.commit` is `false`: automatic commits happen on a timer, whether or not the file has been written.
+
+### Files and cleaning
+
+- **JSON Lines:** a text file with one complete JSON object on each line. Tools can read it line by line, so a huge file doesn't have to fit in memory, and it is easy to load into Snowflake.
+- **Landing zone:** the folder where raw data first arrives, before any real transformation. If a later step has a bug, we can rerun it from these files without calling the API again. Ours is `data/landing/line_status/`, split into a `date=YYYY-MM-DD` folder for each day. It is not sent to GitHub, because data files don't belong in a code repository.
+- **Why we remove `$type`:** TfL's API adds `$type` fields that name its internal code types, such as `Tfl.Api.Presentation.Entities.Line`. They say nothing about the tube, they repeat at every level, and they make every record bigger.
